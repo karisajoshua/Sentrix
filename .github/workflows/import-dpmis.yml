@@ -25,6 +25,11 @@ jobs:
           name: dpmis-public-project-register
           path: data/dpmis-projects.csv
           retention-days: 30
+      - name: Import verified seed into review queue
+        if: ${{ env.SUPABASE_URL != '' && env.SUPABASE_SERVICE_ROLE_KEY != '' }}
+        run: |
+          npm install --no-audit --no-fund
+          node scripts/import-public-projects.mjs data/dpmis-verified-seed.csv
       - name: Import records with known counties into verification queue
         if: ${{ env.SUPABASE_URL != '' && env.SUPABASE_SERVICE_ROLE_KEY != '' }}
         env:
