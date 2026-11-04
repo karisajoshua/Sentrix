@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import IntelligenceMap from "./IntelligenceMap";
+import ManagementWorkspace from "./ManagementWorkspace";
 import {getConstituency,getConstituenciesByCounty,getWardsByConstituency} from "kenya-regions";
 import { demoProjects, statusColor, type Project, type ProjectStatus } from "./data";
 import { fetchVerifiedProjects, hasSupabaseConfig } from "./supabase";
 import { fetchProjectAccountability, type ProjectAccountability } from "./projectAccountability";
 const fmt = (v:number) => "KSh " + new Intl.NumberFormat("en-KE",{notation:"compact",maximumFractionDigits:1}).format(v);
 export default function App(){
+ const [management,setManagement]=useState(false);
  const [projects,setProjects]=useState<Project[]>(hasSupabaseConfig?[]:demoProjects); const [dataMode,setDataMode]=useState<"demo"|"live"|"loading"|"error">(hasSupabaseConfig?"loading":"demo");
  const [detail,setDetail]=useState<ProjectAccountability|null>(null); const [detailError,setDetailError]=useState(""); const [detailLoading,setDetailLoading]=useState(false);
  const [focusArea,setFocusArea]=useState<{lng:number;lat:number;zoom:number}|null>(null);
@@ -23,9 +25,10 @@ export default function App(){
  const county=projects.find(p=>q.includes(p.county.toLowerCase()))?.county;
  const status=q.includes("stall")||q.includes("incomplete")?"Stalled":q.includes("complete")?"Completed":q.includes("progress")?"In progress":"All";
  setFilter(status);setCounty(county||"All counties");setConstituency("All constituencies");setWard("All wards");setSearch("");setMessage(dataMode==="live"?"Applied filters to published verified records. AI commands are not connected.":"Applied local demonstration filters. AI commands are not connected.");}
+ if(management)return <ManagementWorkspace onBack={()=>setManagement(false)}/>;
  return <div className="shell">
  <aside className="sidebar"><div className="brand"><span className="brand-icon">◈</span><div><strong>SENTRIX</strong><small>POLITICAL INTELLIGENCE</small></div></div>
- <div className="section-label">WORKSPACE</div><div className="nav active">◉ &nbsp; Intelligence Map</div><div className="nav muted">▤ &nbsp; Election Analytics <em>Soon</em></div><div className="nav muted">▦ &nbsp; Public Expenditure <em>Soon</em></div><div className="nav muted">◎ &nbsp; Citizen Reports <em>Soon</em></div>
+ <div className="section-label">WORKSPACE</div><button className="nav" onClick={()=>setManagement(true)} style={{width:"100%",textAlign:"left",background:"transparent",color:"#e2e8f0",border:0,cursor:"pointer"}}>▣ &nbsp; Management System</button><div className="nav active">◉ &nbsp; Intelligence Map</div><div className="nav muted">▤ &nbsp; Election Analytics <em>Soon</em></div><div className="nav muted">▦ &nbsp; Public Expenditure <em>Soon</em></div><div className="nav muted">◎ &nbsp; Citizen Reports <em>Soon</em></div>
  <div className="section-label">MAP LAYERS</div><label className="toggle"><span>Project locations</span><input type="checkbox" checked={showProjects} onChange={e=>setShowProjects(e.target.checked)}/></label>
  <div className="section-label">PROJECT STATUS</div><div className="filters">{(["All","Stalled","In progress","Completed","Unknown"] as const).map(s=><button className={filter===s?"chosen":""} key={s} onClick={()=>setFilter(s)}>{s}</button>)}</div>
  <div className="sidebar-footer">{dataMode==="live"?"VERIFIED PUBLIC DATA":dataMode==="loading"?"CONNECTING TO DATABASE":dataMode==="error"?"DATABASE UNAVAILABLE":"DEMO ENVIRONMENT"}<br/><span>{dataMode==="live"?"Only verified published records are shown.":dataMode==="error"?"Live records could not be loaded. No substitute records are shown.":"Demo records are fictional."}</span></div></aside>
