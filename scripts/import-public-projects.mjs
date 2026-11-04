@@ -21,6 +21,12 @@ if(apiKey.split(".").length===3){
   if(payload.role!=="service_role")throw Error("GitHub secret contains JWT role "+String(payload.role)+" instead of service_role. Use the service_role key from the SAME Supabase project.");
  } catch(e){throw Error("Cannot verify legacy service_role JWT: "+e.message);}
 } else if(!apiKey.startsWith("sb_secret_"))throw Error("Unexpected API key format. Use a server-side Supabase secret key or legacy service_role key.");
+function normalizeStatus(value){
+ const s=String(value||"unknown").trim().toLowerCase().replace(/[\\s-]+/g,"_");
+ const alias={ongoing:"in_progress",complete:"completed",inprogress:"in_progress",planned:"proposed"};
+ const normalized=alias[s]||s;
+ return ["proposed","in_progress","completed","delayed","stalled","unknown"].includes(normalized)?normalized:"unknown";
+}
 const rows=parseCSV(readFileSync(path,"utf8"));const db=createClient(process.env.SUPABASE_URL,apiKey,{auth:{persistSession:false}});
 let inserted=0,skipped=0;for(const [i,r] of rows.entries()){
  const source=r.source_url||process.env.SOURCE_URL;
@@ -34,8 +40,8 @@ let inserted=0,skipped=0;for(const [i,r] of rows.entries()){
  if(progress!==null&&progress>100)throw Error("Progress exceeds 100 at row "+(i+2));
  const {data:existing,error:findError}=await db.from("projects").select("id").eq("name",r.name).eq("county",r.county).eq("source_url",source).limit(1);if(findError)throw findError;
  if(existing?.length){skipped++;continue;}
- const payload={name:r.name,county:r.county,constituency:r.constituency||null,ward:r.ward||null,category:r.category||"Other",status:r.status||"Unknown",allocated_budget:budget,progress_percent:progress,description:[r.external_id||"",r.description||"",r.location_raw?"Published location: "+r.location_raw:"",r.period_raw?"Published period: "+r.period_raw:""].filter(Boolean).join(" | "),source_url:source,verification_status:"pending"};
+ const payload={name:r.name,county:r.county,constituency:r.constituency||null,ward:r.ward||null,category:r.category||"Other",status:normalizeStatus(r.status),allocated_budget:budget,progress_percent:progress,description:[r.external_id||"",r.description||"",r.location_raw?"Published location: "+r.location_raw:"",r.period_raw?"Published period: "+r.period_raw:""].filter(Boolean).join(" | "),source_url:source,verification_status:"under_review"};
  if(lng!==null)payload.location="SRID=4326;POINT("+lng+" "+lat+")";
  const {error}=await db.from("projects").insert(payload);if(error)throw Error("Row "+(i+2)+": "+error.message);inserted++;
 }
-console.log(JSON.stringify({inserted,skipped,review:"New records are pending verification and do not appear on the public map until approved."}));
+console.log(JSON.stringify({inserted,skipped,review:"New records are under_review verification and do not appear on the public map until approved."}));
