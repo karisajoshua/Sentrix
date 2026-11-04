@@ -17,21 +17,27 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install requests==2.32.3 beautifulsoup4==4.12.3
+      - name: Import source-checked seed into review queue
+        if: ${{ env.SUPABASE_URL != '' && env.SUPABASE_SERVICE_ROLE_KEY != '' }}
+        run: |
+          npm install --no-audit --no-fund
+          node scripts/import-public-projects.mjs data/dpmis-verified-seed.csv
       - name: Extract complete DPMIS public register
+        id: extract
+        continue-on-error: true
         run: python scripts/fetch_dpmis.py --output data/dpmis-projects.csv --min-records 200
       - name: Upload reviewed raw register
+        if: ${{ steps.extract.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
           name: dpmis-public-project-register
           path: data/dpmis-projects.csv
           retention-days: 30
-      - name: Import verified seed into review queue
-        if: ${{ env.SUPABASE_URL != '' && env.SUPABASE_SERVICE_ROLE_KEY != '' }}
-        run: |
-          npm install --no-audit --no-fund
-          node scripts/import-public-projects.mjs data/dpmis-verified-seed.csv
+      - name: Report unavailable upstream source
+        if: ${{ steps.extract.outcome == 'failure' }}
+        run: echo "::warning::DPMIS extraction failed; source-checked seed import (if configured) was not blocked. Full dataset has NOT been imported."
       - name: Import records with known counties into verification queue
-        if: ${{ env.SUPABASE_URL != '' && env.SUPABASE_SERVICE_ROLE_KEY != '' }}
+        if: ${{ steps.extract.outcome == 'success' && env.SUPABASE_URL != '' && env.SUPABASE_SERVICE_ROLE_KEY != '' }}
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
