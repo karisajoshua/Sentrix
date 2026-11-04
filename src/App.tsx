@@ -2,12 +2,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import maplibregl, { type Map as MapType, type GeoJSONSource } from "maplibre-gl";
 import { demoProjects, statusColor, type Project, type ProjectStatus } from "./data";
 import { fetchVerifiedProjects, hasSupabaseConfig } from "./supabase";
+import { fetchProjectAccountability, type ProjectAccountability } from "./projectAccountability";
 const defaultStyle = {version:8 as const,sources:{osm:{type:"raster" as const,tiles:["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],tileSize:256,attribution:"© OpenStreetMap contributors"}},layers:[{id:"osm",type:"raster" as const,source:"osm"}]};
 const fmt = (v:number) => "KSh " + new Intl.NumberFormat("en-KE",{notation:"compact",maximumFractionDigits:1}).format(v);
 function featureCollection(items:Project[]) {return {type:"FeatureCollection" as const,features:items.map(p=>({type:"Feature" as const,geometry:{type:"Point" as const,coordinates:[p.lng,p.lat]},properties:{id:p.id,status:p.status}}))};}
 export default function App(){
  const mapContainer=useRef<HTMLDivElement>(null); const map=useRef<MapType|null>(null);
  const [projects,setProjects]=useState<Project[]>(demoProjects); const [dataMode,setDataMode]=useState<"demo"|"live"|"loading"|"error">(hasSupabaseConfig?"loading":"demo");
+ const [detail,setDetail]=useState<ProjectAccountability|null>(null); const [detailError,setDetailError]=useState(""); const [detailLoading,setDetailLoading]=useState(false);
  const [selected,setSelected]=useState<Project|null>(null); const [search,setSearch]=useState(""); const [filter,setFilter]=useState<"All"|ProjectStatus>("All"); const [showProjects,setShowProjects]=useState(true); const [command,setCommand]=useState(""); const [message,setMessage]=useState("");
  useEffect(()=>{if(!hasSupabaseConfig)return;let active=true;fetchVerifiedProjects().then(items=>{if(active){setProjects(items);setDataMode("live");}}).catch(err=>{console.error("Sentrix Supabase read failed",err);if(active)setDataMode("error");});return()=>{active=false};},[]);
  const filtered=useMemo(()=>projects.filter(p=>(filter==="All"||p.status===filter)&&[p.name,p.county,p.category].join(" ").toLowerCase().includes(search.toLowerCase())),[filter,search,projects]);
@@ -22,6 +24,7 @@ export default function App(){
    m.on("mouseenter","project-points",()=>m.getCanvas().style.cursor="pointer");m.on("mouseleave","project-points",()=>m.getCanvas().style.cursor="");
   });return()=>{m.remove();map.current=null};},[]);
  useEffect(()=>{const m=map.current;if(!m?.isStyleLoaded())return;(m.getSource("projects") as GeoJSONSource|undefined)?.setData(featureCollection(filtered));if(m.getLayer("project-points"))m.setLayoutProperty("project-points","visibility",showProjects?"visible":"none");if(m.getLayer("project-halo"))m.setLayoutProperty("project-halo","visibility",showProjects?"visible":"none");},[filtered,showProjects]);
+ useEffect(()=>{setDetail(null);setDetailError("");if(!selected||dataMode!=="live")return;let active=true;setDetailLoading(true);fetchProjectAccountability(selected.id).then(data=>{if(active)setDetail(data)}).catch(err=>{if(active)setDetailError(String(err))}).finally(()=>{if(active)setDetailLoading(false)});return()=>{active=false};},[selected?.id,dataMode]);
  function go(p:Project){setSelected(p);map.current?.flyTo({center:[p.lng,p.lat],zoom:9,essential:true});}
  function runCommand(){const q=command.trim().toLowerCase();if(!q)return;
  const county=projects.find(p=>q.includes(p.county.toLowerCase()))?.county;
@@ -37,7 +40,20 @@ export default function App(){
  <section className="stats"><div><span>Projects in view</span><strong>{filtered.length}</strong></div><div><span>Stalled</span><strong className="red">{filtered.filter(p=>p.status==="Stalled").length}</strong></div><div><span>In progress</span><strong className="yellow">{filtered.filter(p=>p.status==="In progress").length}</strong></div><div><span>{dataMode==="live"?"Verified allocation":"Illustrative allocation"}</span><strong>{fmt(filtered.reduce((n,p)=>n+p.budget,0))}</strong></div></section>
  <div className="workspace"><div className="map-wrap"><div ref={mapContainer} className="map"/><div className="map-label">◉ &nbsp; SENTRIX GEOINT / KENYA</div><div className="legend">{(Object.keys(statusColor) as ProjectStatus[]).map(s=><span key={s}><i style={{background:statusColor[s]}}/>{s}</span>)}</div></div>
  <div className="right-panel"><div className="panel-heading"><strong>Project Explorer</strong><span>{filtered.length} records</span></div><input aria-label="Search projects" placeholder="Search county, project, sector..." value={search} onChange={e=>setSearch(e.target.value)}/><div className="records">{filtered.map(p=><button key={p.id} className={"record "+(selected?.id===p.id?"selected":"")} onClick={()=>go(p)}><div className="record-top"><strong>{p.name}</strong><i style={{background:statusColor[p.status]}}/></div><small>{p.county} · {p.category}</small><div className="record-meta"><span>{p.status}</span><span>{p.progress}%</span></div></button>)}{!filtered.length&&<p className="empty">No matching records.</p>}</div>
- {selected&&<div className="detail"><div className="panel-heading"><strong>Project details</strong><button onClick={()=>setSelected(null)} aria-label="Close details">✕</button></div><h3>{selected.name}</h3><p>{selected.description}</p><div className="detail-grid"><span>County</span><b>{selected.county}</b><span>Budget</span><b>{fmt(selected.budget)}</b><span>Status</span><b>{selected.status}</b><span>Progress</span><b>{selected.progress}%</b><span>Evidence</span><b>{selected.source}</b></div></div>}</div></div>
+ {selected&&<div className="detail"><div className="panel-heading"><strong>Project details</strong><button onClick={()=>setSelected(null)} aria-label="Close details">✕</button></div><h3>{selected.name}</h3><p>{selected.description}</p><div className="detail-grid"><span>County</span><b>{selected.county}</b><span>Budget</span><b>{fmt(selected.budget)}</b><span>Status</span><b>{selected.status}</b><span>Progress</span><b>{selected.progress}%</b><span>Evidence</span><b>{selected.source}</b></div>
+ {dataMode==="live"&&<section aria-label="Project accountability" style={{marginTop:16}}>
+ <h3>Public accountability</h3>
+ {detailLoading&&<p>Loading verified project records…</p>}
+ {detailError&&<p role="alert">Unable to load accountability records: {detailError}</p>}
+ {detail&&<>
+ <div className="detail-grid"><span>Verified allocations</span><b>{fmt(detail.allocations.reduce((s,r)=>s+Number(r.amount),0))}</b><span>Disbursements (KES only)</span><b>{fmt(detail.disbursements.filter(r=>r.currency_code==="KES").reduce((s,r)=>s+Number(r.amount),0))}</b><span>Expenditures (KES only)</span><b>{fmt(detail.expenditures.filter(r=>r.currency_code==="KES").reduce((s,r)=>s+Number(r.amount),0))}</b><span>Contracts</span><b>{detail.contracts.length}</b><span>Milestones</span><b>{detail.milestones.length}</b><span>Evidence records</span><b>{detail.evidence.length}</b></div>
+ <p style={{fontSize:12}}>Figures are totals of accessible verified records, not audited or necessarily complete financial totals. Allocation currencies follow their parent budgets; cross-currency totals require normalization.</p>
+ {detail.milestones.map(m=><p key={m.id}><strong>{m.title}</strong> · {m.status} {m.due_date&&"· Due "+m.due_date} {m.source_url&&<a href={m.source_url} target="_blank" rel="noopener noreferrer">Source</a>}</p>)}
+ {detail.updates.map(u=><p key={u.id}><strong>{u.title}</strong> — {u.summary} {u.source_url&&<a href={u.source_url} target="_blank" rel="noopener noreferrer">Source</a>}</p>)}
+ {detail.contracts.map(x=><p key={x.id}><strong>Contract:</strong> {x.title} · {x.contract_value==null?"Value not published":x.currency_code+" "+Number(x.contract_value).toLocaleString()} {x.source_url&&<a href={x.source_url} target="_blank" rel="noopener noreferrer">Source</a>}</p>)}
+ {detail.evidence.map(x=><p key={x.id}><strong>{x.evidence_type}:</strong> {x.title} {x.source_url&&<a href={x.source_url} target="_blank" rel="noopener noreferrer">View source</a>}</p>)}
+ </>}
+ </section>}</div>}</div></div>
  <form className="command" onSubmit={e=>{e.preventDefault();runCommand()}}><span>⌘</span><input aria-label="Map command" placeholder='Try: "show stalled projects in Machakos"' value={command} onChange={e=>setCommand(e.target.value)}/><button type="submit">Run command ↵</button></form>{message&&<div className="notice" role="status">{message}</div>}
  </main></div>;
 }
