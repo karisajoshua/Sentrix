@@ -36,3 +36,5 @@
 .record.selected{border-color:#2be0a3}
 .command button{background:#087e64}
 @media(max-width:740px){.map-layers{top:55px;right:8px;min-width:158px;padding:9px}.map-breadcrumb{left:53px}.map-hint{bottom:62px;max-width:65%;font-size:10px}.map-label{display:none}.legend{max-width:100%;bottom:5px;left:5px;right:5px;gap:8px;font-size:9px}.map-wrap{min-height:480px}}
+
+.explorer-hint{font-size:11px;line-height:1.5;color:#8eafc4;margin:0}.empty a{color:#53dcb2;text-decoration:underline;text-underline-offset:3px}.empty p{line-height:1.5}
