@@ -5,12 +5,12 @@ import {countyOutlines} from "kenya-regions/outlines";
 import {statusColor,type Project} from "./data";
 
 type Area={id:string;name:string;level:string;parent_id:string|null;geometry:GeoJSON.Geometry};
-type Props={projects:Project[];selected:Project|null;showProjects:boolean;onSelect:(p:Project)=>void;onArea:(level:string,name:string)=>void;onMessage:(msg:string)=>void};
+type Props={projects:Project[];selected:Project|null;showProjects:boolean;onSelect:(p:Project)=>void;onArea:(level:string,name:string)=>void;onMessage:(msg:string)=>void;focusArea?:{lng:number;lat:number;zoom:number}|null};
 const DARK="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 const kenyaBounds:[[number,number],[number,number]]=[[33.85,-4.8],[41.95,5.3]];
 function fc(items:Project[]):GeoJSON.FeatureCollection{return {type:"FeatureCollection",features:items.map(p=>({type:"Feature",geometry:{type:"Point",coordinates:[p.lng,p.lat]},properties:{id:p.id,name:p.name,county:p.county,status:p.status}}))};}
 function boundaries(items:Area[]):GeoJSON.FeatureCollection{return {type:"FeatureCollection",features:items.map(a=>({type:"Feature",geometry:a.geometry,properties:{id:a.id,name:a.name,level:a.level,parent_id:a.parent_id||""}}))};}
-export default function IntelligenceMap({projects,selected,showProjects,onSelect,onArea,onMessage}:Props){
+export default function IntelligenceMap({projects,selected,showProjects,onSelect,onArea,onMessage,focusArea}:Props){
  const holder=useRef<HTMLDivElement>(null);const map=useRef<MapType|null>(null);
  const projectsRef=useRef(projects);projectsRef.current=projects;
  const areaRef=useRef(onArea);areaRef.current=onArea;
@@ -47,6 +47,7 @@ export default function IntelligenceMap({projects,selected,showProjects,onSelect
  useEffect(()=>{const m=map.current;if(!m||!ready)return;const parent=crumbs.length?crumbs[crumbs.length-1].id:null;const visible=areas.filter(a=>a.level===level&&(parent?a.parent_id===parent:true));const polygons=visible.length?boundaries(visible):level==="county"?countyOutlines as GeoJSON.FeatureCollection:{type:"FeatureCollection" as const,features:[]};hoverId.current=null;(m.getSource("sentrix-boundaries") as GeoJSONSource|undefined)?.setData(polygons);for(const id of ["sentrix-boundary-fill","sentrix-boundary-line"])if(m.getLayer(id))m.setLayoutProperty(id,"visibility",showBoundaries?"visible":"none");},[areas,level,crumbs,showBoundaries,ready]);
  useEffect(()=>{const m=map.current;if(m&&ready&&m.getLayer("sentrix-heat"))m.setLayoutProperty("sentrix-heat","visibility",showHeat?"visible":"none");},[showHeat,ready]);
  useEffect(()=>{if(selected&&map.current&&ready)map.current.flyTo({center:[selected.lng,selected.lat],zoom:Math.max(map.current.getZoom(),10),essential:true});},[selected,ready]);
+ useEffect(()=>{if(focusArea&&map.current&&ready)map.current.flyTo({center:[focusArea.lng,focusArea.lat],zoom:focusArea.zoom,essential:true,duration:800});},[focusArea,ready]);
  const reset=()=>{setCrumbs([]);setLevel("county");onArea("reset","");map.current?.fitBounds(kenyaBounds,{padding:28,duration:600});};
  return <div className="intel-map"><div ref={holder} className="intel-canvas" aria-label="Interactive dark geospatial map of Kenya"/><div className="map-breadcrumb"><button onClick={reset}>KENYA</button>{crumbs.map((c,i)=><button key={c.id} onClick={()=>{setCrumbs(crumbs.slice(0,i+1));setLevel(c.level==="county"?"constituency":"ward");onArea(c.level,c.name);}}>/ {c.name}</button>)}</div>
  <div className="map-layers"><strong>◈ MAP LAYERS</strong><label><input type="checkbox" checked={showProjects} readOnly/> Project points <small>Use sidebar</small></label><label><input type="checkbox" checked={showBoundaries} onChange={e=>setShowBoundaries(e.target.checked)}/> {level} boundaries</label><label><input type="checkbox" checked={showHeat} onChange={e=>setShowHeat(e.target.checked)}/> Project heatmap</label><button onClick={reset}>⌖ Reset Kenya view</button></div>
