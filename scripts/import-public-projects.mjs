@@ -16,6 +16,8 @@ function parseCSV(raw){const out=[];let row=[],field="",quoted=false;for(let i=0
 const rows=parseCSV(readFileSync(path,"utf8"));const db=createClient(process.env.SUPABASE_URL,process.env.SUPABASE_SERVICE_ROLE_KEY,{auth:{persistSession:false}});
 let inserted=0,skipped=0;for(const [i,r] of rows.entries()){
  const source=r.source_url||process.env.SOURCE_URL;
+ // DPMIS national and multi-county projects remain in the raw extraction artifact until a defensible location is available.
+ if(!r.county){console.warn("Staging without county (not inserted):",r.external_id||r.name);skipped++;continue;}
  if(!r.name||!r.county||!source||!/^https:\/\//.test(source)){console.warn("Skipping row",i+2,"missing project identity, county or HTTPS source");skipped++;continue;}
  const lng=r.longitude===""||r.longitude===undefined?null:Number(r.longitude),lat=r.latitude===""||r.latitude===undefined?null:Number(r.latitude);
  if((lng===null)!==(lat===null)||(lng!==null&&(!Number.isFinite(lng)||!Number.isFinite(lat)||lng<33||lng>42||lat<-5||lat>6))){console.warn("Skipping row",i+2,"invalid coordinates");skipped++;continue;}
@@ -24,7 +26,7 @@ let inserted=0,skipped=0;for(const [i,r] of rows.entries()){
  if(progress!==null&&progress>100)throw Error("Progress exceeds 100 at row "+(i+2));
  const {data:existing,error:findError}=await db.from("projects").select("id").eq("name",r.name).eq("county",r.county).eq("source_url",source).limit(1);if(findError)throw findError;
  if(existing?.length){skipped++;continue;}
- const payload={name:r.name,county:r.county,constituency:r.constituency||null,ward:r.ward||null,category:r.category||"Other",status:r.status||"Unknown",allocated_budget:budget,progress_percent:progress,description:r.description||"",source_url:source,verification_status:"pending"};
+ const payload={name:r.name,county:r.county,constituency:r.constituency||null,ward:r.ward||null,category:r.category||"Other",status:r.status||"Unknown",allocated_budget:budget,progress_percent:progress,description:[r.external_id||"",r.description||"",r.location_raw?"Published location: "+r.location_raw:"",r.period_raw?"Published period: "+r.period_raw:""].filter(Boolean).join(" | "),source_url:source,verification_status:"pending"};
  if(lng!==null)payload.location="SRID=4326;POINT("+lng+" "+lat+")";
  const {error}=await db.from("projects").insert(payload);if(error)throw Error("Row "+(i+2)+": "+error.message);inserted++;
 }
