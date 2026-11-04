@@ -10,7 +10,7 @@ export default function App(){
  const filtered=useMemo(()=>demoProjects.filter(p=>(filter==="All"||p.status===filter)&&[p.name,p.county,p.category].join(" ").toLowerCase().includes(search.toLowerCase())),[filter,search]);
  const filteredRef=useRef(filtered);filteredRef.current=filtered;
  useEffect(()=>{if(!mapContainer.current||map.current)return;
-  const m=new maplibregl.Map({container:mapContainer.current,style:import.meta.env.VITE_MAP_STYLE_URL||defaultStyle,center:[37.5,0.2],zoom:5.2,attributionControl:true});
+  const m=new maplibregl.Map({container:mapContainer.current,style:import.meta.env.VITE_MAP_STYLE_URL||defaultStyle,center:[37.5,0.2],zoom:5.2,attributionControl:{}});
   map.current=m;m.addControl(new maplibregl.NavigationControl(),"top-right");
   m.on("load",()=>{m.addSource("projects",{type:"geojson",data:featureCollection(filteredRef.current)});
    m.addLayer({id:"project-halo",type:"circle",source:"projects",paint:{"circle-radius":15,"circle-color":["match",["get","status"],"Stalled","#fb6472","In progress","#f5b94f","#3dd9a0"],"circle-opacity":0.15}});
