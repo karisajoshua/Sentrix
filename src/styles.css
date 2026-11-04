@@ -40,3 +40,5 @@
 .explorer-hint{font-size:11px;line-height:1.5;color:#8eafc4;margin:0}.empty a{color:#53dcb2;text-decoration:underline;text-underline-offset:3px}.empty p{line-height:1.5}
 
 .contract-record{border:1px solid #284057;border-radius:8px;padding:12px;margin:12px 0;background:#0a1827}.contract-record .detail-grid{margin:10px 0}.contract-record a{color:#53dcb2}
+
+.geo-tree{display:flex;flex-direction:column;gap:9px;margin:8px 0 14px}.geo-tree strong{color:#d7ebf6;font-size:12px}.geo-tree-items{display:flex;gap:5px;flex-wrap:wrap;max-height:170px;overflow-y:auto}.geo-tree-items button{background:#11283a;border:1px solid #2a485b;border-radius:5px;color:#b9d5e6;padding:6px 8px;font-size:11px;cursor:pointer}.geo-tree-items button:hover,.geo-tree-items button.chosen{background:#12566b;color:#fff;border-color:#4dd9e4}.geo-tree small{color:#8299ab;line-height:1.4}
