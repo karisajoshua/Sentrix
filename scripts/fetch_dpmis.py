@@ -9,6 +9,9 @@ import csv
 import re
 from datetime import datetime, timezone
 import requests
+import time
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from bs4 import BeautifulSoup
 
 URL = "https://dpmis.treasury.go.ke/projects"
@@ -26,8 +29,18 @@ def parse_location(raw):
     return tuple((parts + ["", "", ""])[:3])
 
 def collect():
-    response = requests.get(URL, timeout=50, headers={"User-Agent": "Sentrix-public-data-import/1.0 (+https://github.com/karisajoshua/Sentrix)"})
-    response.raise_for_status()
+    session = requests.Session()
+    retries = Retry(total=5, connect=5, read=5, status=5, backoff_factor=2,
+                    status_forcelist=[429, 500, 502, 503, 504],
+                    allowed_methods=frozenset(["GET"]), respect_retry_after_header=True)
+    session.mount("https://", HTTPAdapter(max_retries=retries))
+    try:
+        response = session.get(URL, timeout=(15, 60),
+            headers={"User-Agent": "Mozilla/5.0 (compatible; SentrixPublicData/1.0; +https://github.com/karisajoshua/Sentrix)",
+                     "Accept": "text/html,application/xhtml+xml", "Connection": "close"})
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        raise SystemExit("DPMIS download failed after retries. The Treasury server may be unavailable or refusing GitHub-hosted requests. No data was overwritten. Cause: " + str(exc)) from exc
     soup = BeautifulSoup(response.text, "html.parser")
     result = {}
     for h in soup.find_all(["h3"]):
