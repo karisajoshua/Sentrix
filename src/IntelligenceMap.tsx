@@ -1,0 +1,53 @@
+import {useEffect,useRef,useState} from "react";
+import maplibregl,{type Map as MapType,type GeoJSONSource} from "maplibre-gl";
+import {client} from "./supabase";
+import {statusColor,type Project} from "./data";
+
+type Area={id:string;name:string;level:string;parent_id:string|null;geometry:GeoJSON.Geometry};
+type Props={projects:Project[];selected:Project|null;showProjects:boolean;onSelect:(p:Project)=>void;onArea:(level:string,name:string)=>void;onMessage:(msg:string)=>void};
+const DARK="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
+const kenyaBounds:[[number,number],[number,number]]=[[33.85,-4.8],[41.95,5.3]];
+function fc(items:Project[]):GeoJSON.FeatureCollection{return {type:"FeatureCollection",features:items.map(p=>({type:"Feature",geometry:{type:"Point",coordinates:[p.lng,p.lat]},properties:{id:p.id,name:p.name,county:p.county,status:p.status}}))};}
+function boundaries(items:Area[]):GeoJSON.FeatureCollection{return {type:"FeatureCollection",features:items.map(a=>({type:"Feature",geometry:a.geometry,properties:{id:a.id,name:a.name,level:a.level,parent_id:a.parent_id||""}}))};}
+export default function IntelligenceMap({projects,selected,showProjects,onSelect,onArea,onMessage}:Props){
+ const holder=useRef<HTMLDivElement>(null);const map=useRef<MapType|null>(null);
+ const projectsRef=useRef(projects);projectsRef.current=projects;
+ const areaRef=useRef(onArea);areaRef.current=onArea;
+ const selectRef=useRef(onSelect);selectRef.current=onSelect;
+ const [level,setLevel]=useState("county");const [showBoundaries,setShowBoundaries]=useState(true);const [showHeat,setShowHeat]=useState(false);
+ const [areas,setAreas]=useState<Area[]>([]);const [hover,setHover]=useState("");const [ready,setReady]=useState(false);const [mapError,setMapError]=useState("");
+ const [crumbs,setCrumbs]=useState<{id:string;name:string;level:string}[]>([]);
+ const areasRef=useRef<Area[]>([]);areasRef.current=areas;
+ const levelRef=useRef(level);levelRef.current=level;
+ const crumbsRef=useRef(crumbs);crumbsRef.current=crumbs;
+ useEffect(()=>{if(!client)return;let active=true;(async()=>{const rows:Area[]=[];for(let from=0;from<5000;from+=1000){const {data,error}=await client.from("published_boundaries").select("id,name,level,parent_id,geometry").range(from,from+999);if(error)throw error;rows.push(...(data as Area[]||[]));if(!data||data.length<1000)break;}if(active)setAreas(rows);})().catch(e=>{if(active)onMessage("Administrative boundaries unavailable: "+String(e));});return()=>{active=false};},[]);
+ useEffect(()=>{if(!holder.current||map.current)return;
+ const m=new maplibregl.Map({container:holder.current,style:DARK,center:[37.7,0.4],zoom:5.2,attributionControl:{compact:true},maxPitch:70});
+ map.current=m;m.addControl(new maplibregl.NavigationControl({showCompass:true}),"top-left");m.addControl(new maplibregl.ScaleControl({unit:"metric"}),"bottom-left");
+ m.on("error",e=>{if(!m.isStyleLoaded()){setMapError("Dark basemap could not load. Check network access.");onMessage(String(e.error||"Map style error"));}});
+ m.on("load",()=>{
+  setReady(true);setMapError("");
+  m.addSource("sentrix-projects",{type:"geojson",data:fc(projectsRef.current),cluster:true,clusterRadius:44,clusterMaxZoom:12});
+  m.addSource("sentrix-boundaries",{type:"geojson",data:boundaries(areasRef.current)});
+  m.addLayer({id:"sentrix-boundary-fill",type:"fill",source:"sentrix-boundaries",paint:{"fill-color":"#36b7f6","fill-opacity":["case",["boolean",["feature-state","hover"],false],0.2,0.025]}});
+  m.addLayer({id:"sentrix-boundary-line",type:"line",source:"sentrix-boundaries",paint:{"line-color":"#65b7ef","line-width":["interpolate",["linear"],["zoom"],4,0.7,9,1.8],"line-opacity":0.8}});
+  m.addLayer({id:"sentrix-heat",type:"heatmap",source:"sentrix-projects",maxzoom:13,layout:{visibility:"none"},paint:{"heatmap-weight":1,"heatmap-intensity":["interpolate",["linear"],["zoom"],3,0.5,11,2],"heatmap-radius":["interpolate",["linear"],["zoom"],3,15,11,42],"heatmap-opacity":0.65}});
+  m.addLayer({id:"sentrix-clusters",type:"circle",source:"sentrix-projects",filter:["has","point_count"],paint:{"circle-color":"#123c59","circle-stroke-color":"#42e6a4","circle-stroke-width":2,"circle-radius":["step",["get","point_count"],17,20,24,100,32]}});
+  m.addLayer({id:"sentrix-cluster-labels",type:"symbol",source:"sentrix-projects",filter:["has","point_count"],layout:{"text-field":["get","point_count_abbreviated"],"text-size":12},paint:{"text-color":"#ffffff"}});
+  m.addLayer({id:"sentrix-points",type:"circle",source:"sentrix-projects",filter:["!",["has","point_count"]],paint:{"circle-radius":["interpolate",["linear"],["zoom"],5,6,12,11],"circle-color":["match",["get","status"],"Completed",statusColor.Completed,"In progress",statusColor["In progress"],"Stalled",statusColor.Stalled,statusColor.Unknown],"circle-stroke-width":2,"circle-stroke-color":"#081321"}});
+  m.on("click","sentrix-clusters",e=>{const feature=e.features?.[0];const id=feature?.properties?.cluster_id;if(id===undefined)return;const source=m.getSource("sentrix-projects") as GeoJSONSource;source.getClusterExpansionZoom(id).then(zoom=>{if(feature?.geometry.type==="Point")m.easeTo({center:feature.geometry.coordinates as [number,number],zoom});}).catch(()=>{});});
+  m.on("click","sentrix-points",e=>{const id=e.features?.[0]?.properties?.id;const p=projectsRef.current.find(p=>p.id===id);if(p)selectRef.current(p);});
+  m.on("click","sentrix-boundary-fill",e=>{const a=e.features?.[0]?.properties;if(!a)return;const entry=areasRef.current.find(x=>x.id===a.id);if(!entry)return;const chain=crumbsRef.current;setCrumbs([...chain.filter(c=>c.id!==entry.id),{id:entry.id,name:entry.name,level:entry.level}]);areaRef.current(entry.level,entry.name);const next=entry.level==="county"?"constituency":entry.level==="constituency"?"ward":"ward";setLevel(next);const b=new maplibregl.LngLatBounds();function walk(coords:unknown):void{if(!Array.isArray(coords))return;if(typeof coords[0]==="number"&&typeof coords[1]==="number"){b.extend([coords[0],coords[1]]);return;}coords.forEach(walk);}walk((entry.geometry as GeoJSON.MultiPolygon).coordinates);if(!b.isEmpty())m.fitBounds(b,{padding:65,maxZoom:11,duration:650});});
+  for(const id of ["sentrix-boundary-fill","sentrix-points","sentrix-clusters"]){m.on("mouseenter",id,()=>{m.getCanvas().style.cursor="pointer";});m.on("mouseleave",id,()=>{m.getCanvas().style.cursor="";setHover("");});}
+  m.on("mousemove","sentrix-boundary-fill",e=>setHover(String(e.features?.[0]?.properties?.name||"")));
+ });
+ return()=>{m.remove();map.current=null};},[]);
+ useEffect(()=>{const m=map.current;if(!m||!ready)return;const source=m.getSource("sentrix-projects") as GeoJSONSource|undefined;source?.setData(fc(projects));for(const id of ["sentrix-points","sentrix-clusters","sentrix-cluster-labels"])if(m.getLayer(id))m.setLayoutProperty(id,"visibility",showProjects?"visible":"none");},[projects,showProjects,ready]);
+ useEffect(()=>{const m=map.current;if(!m||!ready)return;const parent=crumbs.length?crumbs[crumbs.length-1].id:null;const visible=areas.filter(a=>a.level===level&&(parent?a.parent_id===parent:true));(m.getSource("sentrix-boundaries") as GeoJSONSource|undefined)?.setData(boundaries(visible));for(const id of ["sentrix-boundary-fill","sentrix-boundary-line"])if(m.getLayer(id))m.setLayoutProperty(id,"visibility",showBoundaries?"visible":"none");},[areas,level,crumbs,showBoundaries,ready]);
+ useEffect(()=>{const m=map.current;if(m&&ready&&m.getLayer("sentrix-heat"))m.setLayoutProperty("sentrix-heat","visibility",showHeat?"visible":"none");},[showHeat,ready]);
+ useEffect(()=>{if(selected&&map.current&&ready)map.current.flyTo({center:[selected.lng,selected.lat],zoom:Math.max(map.current.getZoom(),10),essential:true});},[selected,ready]);
+ const reset=()=>{setCrumbs([]);setLevel("county");onArea("reset","");map.current?.fitBounds(kenyaBounds,{padding:28,duration:600});};
+ return <div className="intel-map"><div ref={holder} className="intel-canvas" aria-label="Interactive dark geospatial map of Kenya"/><div className="map-breadcrumb"><button onClick={reset}>KENYA</button>{crumbs.map((c,i)=><button key={c.id} onClick={()=>{setCrumbs(crumbs.slice(0,i+1));setLevel(c.level==="county"?"constituency":"ward");onArea(c.level,c.name);}}>/ {c.name}</button>)}</div>
+ <div className="map-layers"><strong>◈ MAP LAYERS</strong><label><input type="checkbox" checked={showProjects} readOnly/> Project points <small>Use sidebar</small></label><label><input type="checkbox" checked={showBoundaries} onChange={e=>setShowBoundaries(e.target.checked)}/> {level} boundaries</label><label><input type="checkbox" checked={showHeat} onChange={e=>setShowHeat(e.target.checked)}/> Project heatmap</label><button onClick={reset}>⌖ Reset Kenya view</button></div>
+ <div className="map-hint">{hover?hover:areas.length===0?"County outlines load when verified boundary geometry is available.":"Click an area to drill down to "+(level==="county"?"constituencies":level==="constituency"?"wards":"projects")}</div>{mapError&&<div className="map-error" role="alert">{mapError}</div>}</div>;
+}
