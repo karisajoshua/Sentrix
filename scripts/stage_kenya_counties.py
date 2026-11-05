@@ -15,12 +15,12 @@ def main():
  rows=[]
  for f in features:
   props=f.get("properties") or {};geometry=f.get("geometry")
-  name=str(props.get("county") or props.get("County") or props.get("COUNTY") or "").strip()
-  code=str(props.get("objectid_1") or props.get("OBJECTID") or props.get("objectid") or "").strip()
+  name=str(props.get("ADM1_EN") or props.get("adm1_en") or props.get("county") or props.get("County") or props.get("COUNTY") or "").strip()
+  code=str(props.get("OBJECTID_1") or props.get("objectid_1") or props.get("OBJECTID") or props.get("objectid") or "").strip()
   if not name or not code or not geometry or geometry.get("type") not in ("Polygon","MultiPolygon"):raise RuntimeError(f"Invalid county source feature: {props}")
   rows.append((code,name,geometry))
  if len(set(code for code,_,_ in rows))!=47:raise RuntimeError("County source codes are not unique")
- imp=request("geographic_data_imports",[{"source_name":"WWF-Kenya / Survey of Kenya county boundaries (provenance review required)","source_url":COUNTY_SOURCE,"level":"county","notes":"Staged only. Requires geometry, source and administrative-code verification."}])[0]["id"]
+ imp=request("geographic_data_imports",[{"source_name":"UNHCR / IEBC-attributed county boundaries (provenance review required)","source_url":COUNTY_SOURCE,"level":"county","notes":"Staged only. Requires geometry, source and administrative-code verification."}])[0]["id"]
  for start in range(0,len(rows),5):
   payload=[{"import_id":imp,"source_code":code,"name":name,"level":"county","geometry":geometry} for code,name,geometry in rows[start:start+5]]
   for attempt in range(4):
