@@ -28,7 +28,7 @@ def main():
    geom=feature.get("geometry");props=feature.get("properties") or {}
    if not geom or geom.get("type") not in ("Polygon","MultiPolygon"):continue
    code=str(props.get("OBJECTID") or props.get("FID") or props.get("objectid") or f"offset-{offset+len(rows)}")
-   name=str(props.get("ELEC_AREA_") or props.get("IEBC_WARDS") or props.get("WARD_NAME") or props.get("ward_name") or props.get("name") or "").strip()
+   name=str(props.get("ELEC_AREA_") or props.get("IEBC_WARDS") or props.get("Kenya_Ward") or props.get("WARD_NAME") or props.get("ward_name") or props.get("name") or "").strip()
    if not name:continue
    rows.append({"import_id":import_id,"source_code":code,"name":name,"level":"ward","geometry":geom})
   if rows:api("POST","geographic_boundary_staging",rows);staged+=len(rows)
