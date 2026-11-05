@@ -11,15 +11,15 @@ def post(table,rows):
  with urllib.request.urlopen(req,timeout=180) as r:return json.load(r)
 def main():
  meta=get(API);geo_url=meta["gjDownloadURL"];features=get(geo_url)["features"]
- if len(features)!=1450:raise RuntimeError(f"Expected 1450 ADM3 wards; got {len(features)}")
+ if len(features)!=1452:raise RuntimeError(f"Expected 1452 ADM3 wards; got {len(features)}")
  rows=[]
  for f in features:
   props=f.get("properties") or {};geom=f.get("geometry")
   name=str(props.get("shapeName") or "").strip();code=str(props.get("shapeID") or "").strip()
   if not name or not code or not geom or geom.get("type") not in ("Polygon","MultiPolygon"):raise RuntimeError(f"Invalid ADM3 ward record: {props}")
   rows.append((code,name,geom))
- if len(set(x[0] for x in rows))!=1450:raise RuntimeError("Duplicate ADM3 source codes")
- imp=post("geographic_data_imports",[{"source_name":"geoBoundaries Kenya ADM3 ward candidates (IEBC/OCHA attributed)","source_url":geo_url,"level":"ward","notes":"1450 ADM3 ward candidates staged. Parent constituency and topology checks required before publication."}])[0]["id"]
+ if len(set(x[0] for x in rows))!=1452:raise RuntimeError("Duplicate ADM3 source codes")
+ imp=post("geographic_data_imports",[{"source_name":"geoBoundaries Kenya ADM3 ward candidates (IEBC/OCHA attributed)","source_url":geo_url,"level":"ward","notes":"1452 ADM3 features; differs from IEBC's 1450 electoral wards. Staged for discrepancy investigation; publication blocked pending authoritative reconciliation."}])[0]["id"]
  for offset in range(0,len(rows),5):
   batch=[{"import_id":imp,"source_code":code,"name":name,"level":"constituency","geometry":geom} for code,name,geom in rows[offset:offset+5]]
   for attempt in range(4):
