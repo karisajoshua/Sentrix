@@ -1,0 +1,11 @@
+name: Inspect Kenya subcounty source
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/inspect_kenya_subcounties.py
