@@ -7,7 +7,7 @@
 ## Ward coverage is not yet authoritative
 - Original ArcGIS ward feed: 1,412 polygons, repaired 12 invalid geometries using PostGIS ST_MakeValid. Originals retained in geographic_geometry_repair_audit.
 - Official IEBC baseline: 1,450 wards.
-- geoBoundaries ADM3 feed: 1,452 features. Count discrepancy requires reconciliation. Do not automatically publish all 1,452 as electoral wards.
+- geoBoundaries ADM3 feed: 1,452 features, all geometrically valid. This differs from the official 1,450 electoral wards. Spatial match against 290 constituency polygons: 1,027 have >=95% area overlap; 425 are below 95% (minimum 23.98%). Do not publish this layer as electoral wards without reconciliation.
 - Five duplicate ward names in original feed are not necessarily duplicates; different constituencies may share names.
 
 ## Administrative versus electoral
