@@ -1,15 +1,35 @@
 """Stage Kenya ward polygons from a public ArcGIS FeatureServer.
 Requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY. Does not publish unvalidated data.
 """
-import json, os, time, urllib.parse, urllib.request
+import json, os, time, urllib.parse, urllib.request, urllib.error
 from datetime import datetime, timezone
 BASE="https://services6.arcgis.com/zOnyumh63cMmLBBH/ArcGIS/rest/services/Kenya_Wards/FeatureServer/0/query"
 URL=os.environ["SUPABASE_URL"].rstrip("/")
 KEY=os.environ["SUPABASE_SERVICE_ROLE_KEY"]
-HEADERS={"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":"application/json","Prefer":"return=representation"}
+HEADERS={"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":"application/json","Prefer":"return=representation,resolution=merge-duplicates"}
 def api(method,table,data=None,query=""):
  request=urllib.request.Request(URL+"/rest/v1/"+table+query,data=json.dumps(data).encode() if data is not None else None,headers=HEADERS,method=method)
  with urllib.request.urlopen(request,timeout=90) as response:return json.load(response)
+def write_rows(rows):
+ # Keep individual requests small: complex polygons can exceed gateway/database limits.
+ for start in range(0,len(rows),10):
+  chunk=rows[start:start+10]
+  for attempt in range(4):
+   try:
+    api("POST","geographic_boundary_staging",chunk,"?on_conflict=import_id,source_code")
+    break
+   except urllib.error.HTTPError as exc:
+    detail=exc.read(1500).decode("utf-8","replace")
+    if exc.code in (429,500,502,503,504) and attempt<3:
+     print(f"Supabase HTTP {exc.code}; retry {attempt+1}/3 for offset {start}; response: {detail[:300]}",flush=True)
+     time.sleep(2**attempt)
+     continue
+    if len(chunk)>1:
+     print(f"Batch rejected HTTP {exc.code}; isolating {len(chunk)} features. Response: {detail[:500]}",flush=True)
+     for row in chunk: write_rows([row])
+     break
+    raise RuntimeError(f"Failed source_code={chunk[0]['source_code']}, name={chunk[0]['name']}: Supabase HTTP {exc.code}: {detail}") from exc
+
 def fetch(params):
  query=urllib.parse.urlencode(params)
  with urllib.request.urlopen(BASE+"?"+query,timeout=120) as response:return json.load(response)
@@ -31,7 +51,7 @@ def main():
    name=str(props.get("ELEC_AREA_") or props.get("IEBC_WARDS") or props.get("Kenya_Ward") or props.get("WARD_NAME") or props.get("ward_name") or props.get("name") or "").strip()
    if not name:continue
    rows.append({"import_id":import_id,"source_code":code,"name":name,"level":"ward","geometry":geom})
-  if rows:api("POST","geographic_boundary_staging",rows);staged+=len(rows)
+  if rows:write_rows(rows);staged+=len(rows)
   offset+=len(features)
   print(f"Staged {staged} polygons; fetched {offset}/{count}; first_geometry_type={features[0].get('geometry',{}).get('type') if features[0].get('geometry') else 'null'}; first_property_keys={list((features[0].get('properties') or {}).keys())[:12]}",flush=True)
   time.sleep(.2)
