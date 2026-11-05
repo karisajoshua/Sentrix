@@ -16,7 +16,7 @@ def main():
  for f in features:
   props=f.get("properties") or {};geometry=f.get("geometry")
   name=str(props.get("ADM1_EN") or props.get("adm1_en") or props.get("county") or props.get("County") or props.get("COUNTY") or "").strip()
-  code=str(props.get("OBJECTID_1") or props.get("objectid_1") or props.get("OBJECTID") or props.get("objectid") or "").strip()
+  code=str(props.get("ADM1_PCODE") or props.get("FID") or props.get("OBJECTID_1") or props.get("objectid_1") or props.get("OBJECTID") or props.get("objectid") or "").strip()
   if not name or not code or not geometry or geometry.get("type") not in ("Polygon","MultiPolygon"):raise RuntimeError(f"Invalid county source feature: {props}")
   rows.append((code,name,geometry))
  if len(set(code for code,_,_ in rows))!=47:raise RuntimeError("County source codes are not unique")
