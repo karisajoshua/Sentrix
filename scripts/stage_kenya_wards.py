@@ -33,7 +33,7 @@ def main():
    rows.append({"import_id":import_id,"source_code":code,"name":name,"level":"ward","geometry":geom})
   if rows:api("POST","geographic_boundary_staging",rows);staged+=len(rows)
   offset+=len(features)
-  print(f"Staged {staged} polygons; fetched {offset}/{count}",flush=True)
+  print(f"Staged {staged} polygons; fetched {offset}/{count}; first_geometry_type={features[0].get('geometry',{}).get('type') if features[0].get('geometry') else 'null'}; first_property_keys={list((features[0].get('properties') or {}).keys())[:12]}",flush=True)
   time.sleep(.2)
  print(json.dumps({"import_id":import_id,"staged":staged,"expected":count,"publication":"not automatic"}))
 if __name__=="__main__":main()
