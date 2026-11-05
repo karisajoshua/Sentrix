@@ -35,5 +35,6 @@ def main():
   offset+=len(features)
   print(f"Staged {staged} polygons; fetched {offset}/{count}; first_geometry_type={features[0].get('geometry',{}).get('type') if features[0].get('geometry') else 'null'}; first_property_keys={list((features[0].get('properties') or {}).keys())[:12]}",flush=True)
   time.sleep(.2)
+ if staged == 0: raise RuntimeError("Zero ward polygons staged; check source fields")
  print(json.dumps({"import_id":import_id,"staged":staged,"expected":count,"publication":"not automatic"}))
 if __name__=="__main__":main()
