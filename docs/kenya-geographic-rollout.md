@@ -27,3 +27,7 @@
 - geoBoundaries: https://www.geoboundaries.org/api/current/gbOpen/KEN/ADM2/
 - IEBC: https://www.iebc.or.ke/
 \n- Subcounties: https://services.arcgis.com/hBEMHCkbQdfV906F/arcgis/rest/services/Kenya_Sub_Counties/FeatureServer/0\n
+## User-directed provisional ward rollout and 3D navigation (2026-11-05)
+- All 1,452 geoBoundaries ADM3 polygons now available in `published_boundaries`. The 425 previously withheld polygons were assigned by maximum spatial overlap at user request; 3 have <50% constituency overlap. These assignments are provisional, not independently verified electoral hierarchy.
+- Ward selection activates a 65-degree pitched camera at zoom 15.5 and a MapLibre fill-extrusion layer sourced from OpenFreeMap/OpenStreetMap building footprints. Roads are rendered by the OpenFreeMap dark basemap; actual building heights appear when OSM attributes exist, otherwise illustrative fallback heights are used.
+- Buildings/roads depend on local OpenStreetMap coverage, map tile availability and network connectivity. Not photorealistic imagery or guaranteed complete 3D coverage.
